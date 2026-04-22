@@ -29,12 +29,20 @@ No data files are stored in this repository. The notebook downloads data directl
 
 ## 3. Methods (Python Steps)
 
-1. **Parameterised data acquisition** – dates and tickers stored as variables (f-string style), passed to a reusable `fetch_sector_prices()` function
-2. **Data cleaning** – `.dtypes` inspection, forward-fill for isolated missing trading days, `.dropna()`
-3. **Return computation** – `.pct_change()` for daily returns; `(1 + r).cumprod()` for cumulative index
-4. **Summary statistics** – annualised return, annualised volatility, Sharpe ratio, max drawdown, total return — wrapped in `compute_summary_stats()` function
-5. **Annual return pivot** – `.groupby(year)` → sector rotation heatmap
-6. **Visualisation** – 6 charts: cumulative return lines, risk-return scatter, Sharpe bar chart, rolling 30-day volatility, correlation heatmap, annual rotation heatmap
+1. **Parameterised data acquisition** – dates and tickers stored as variables (f-string style), passed to a reusable `fetch_sector_prices()` function. The function includes two defensive checks: it warns on tickers that return no data (e.g. if a symbol is delisted or mistyped) and reports any sector whose history starts later than the requested `START_DATE` (e.g. XLC began trading in June 2018).
+2. **Data cleaning** – `.dtypes` inspection, then a *conditional* forward-fill: missing values are reported first, and `.ffill()` is only applied if any are present. This avoids silently masking data-quality issues when the data is already clean.
+3. **Return computation** – `.pct_change()` for daily returns; `(1 + r).cumprod()` for a cumulative index rebased to 100.
+4. **Summary statistics** – annualised return, annualised volatility, Sharpe ratio, max drawdown, total return — wrapped in `compute_summary_stats()`. Metrics are computed in direct annualised form so each line of code maps 1:1 to its textbook definition:
+
+   ```
+   ann_return = mean(daily) * 252
+   ann_vol    = std(daily)  * sqrt(252)
+   sharpe     = (ann_return - rf_annual) / ann_vol
+   ```
+
+   `max_drawdown()` is defined as a separate top-level helper for reuse.
+5. **Annual return pivot** – `.groupby(year)` → sector rotation heatmap.
+6. **Visualisation** – 6 charts: cumulative return lines, risk-return scatter, Sharpe bar chart, rolling 30-day volatility, correlation heatmap, annual rotation heatmap.
 
 All Python operations mirror the workflow taught in ACC102 Weeks 4–6 (pandas DataFrame manipulation, reusable functions, f-string parameterisation).
 
@@ -62,16 +70,18 @@ cd acc102-sector-dashboard
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Create figures folder
-mkdir figures
+# 3. Create figures folder (the notebook also does this automatically)
+mkdir -p figures
 
 # 4. Open and run the notebook
 jupyter notebook acc102_notebook.ipynb
 ```
 
-Run all cells top-to-bottom. Charts are saved automatically to `/figures/`.
+**Important:** run all cells top-to-bottom via **Kernel → Restart & Run All**. The imports live in the first cell, so skipping to the middle will fail with `NameError: name 'pd' is not defined`.
 
-To change the analysis period, edit only the `START_DATE` and `END_DATE` variables in **Cell 3** — all downstream cells update automatically.
+Charts are saved automatically to `/figures/`.
+
+To change the analysis period, edit only the `START_DATE`, `END_DATE`, and `RISK_FREE` variables in the **Parameters** cell (Section 1) — all downstream cells update automatically.
 
 ---
 
@@ -102,10 +112,14 @@ acc102-sector-dashboard/
 
 ## 8. Limitations & Next Steps
 
-- ETF proxies carry small tracking error vs. pure sector indices
-- Risk-free rate held constant; real rates varied significantly 2020–2024
-- COVID-19 distorts long-run volatility estimates
-- **Next steps:** add Fama-French factor decomposition, rolling Sharpe, and economic cycle overlay
+- **ETF proxy bias** — SPDR ETFs carry small tracking error and expense ratios vs. the pure GICS indices
+- **Fixed risk-free rate** — held constant at 4.5%; real U.S. rates moved from ~0% (2020–21) to >5% (2023–24)
+- **Simple-rate rf approximation** — the Sharpe calculation treats rf as a simple annual rate rather than its compounded-daily equivalent `(1 + rf)**(1/252) - 1`; the difference at rf ≈ 4.5% is under 1 bp/day and does not change the cross-sector ranking
+- **COVID-19 distortion** — the March 2020 crash inflates long-run volatility estimates
+- **Survivorship bias** — current ETF constituents reflect today's index composition, not historical composition
+- **No macro context** — sector performance shown in isolation, without linking to interest rate cycles or GDP
+
+**Next steps:** add Fama-French factor decomposition, rolling Sharpe, and an economic cycle overlay (NBER recession bands, rate cycle regimes).
 
 ---
 
